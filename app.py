@@ -23,7 +23,7 @@ current_date_formatted = datetime.now().strftime('%Y-%m-%d')
 def create_word_document(title, content):
     doc = Document()
     doc.add_heading(title, 0)
-    doc.add_paragraph(f"리서 수행일: {current_date_formatted}")
+    doc.add_paragraph(f"리서치 수행일: {current_date_formatted}")
     doc.add_paragraph("\n--- 데이터 리서치 결과 ---\n")
     doc.add_paragraph(content)
     file_stream = BytesIO()
@@ -236,11 +236,11 @@ with tab1:
                     st.error(f"작업 중 에러가 발생했습니다: {e}")
 
 # =========================================================
-# [TAB 2] 신규 기능: IP 콜라보 매칭 에이전트
+# [TAB 2] 신규 기능: IP 콜라보 매칭 에이전트 (물량 공세 업그레이드)
 # =========================================================
 with tab2:
     st.subheader("🦄 브랜드 맞춤형 IP/캐릭터 콜라보레이션 제안")
-    st.markdown("원하는 콜라보 컨셉과 타겟을 입력하시면, **현재 국내에서 가장 인기 있는 IP(캐릭터, 브랜드, 아티스트 등)** 트렌드를 검색하여 가장 핏이 맞는 후보를 매칭해 드립니다.")
+    st.markdown("원하는 콜라보 컨셉과 타겟을 선택하시면, **현재 국내에서 가장 인기 있는 수많은 IP(캐릭터, 브랜드, 아티스트 등)** 후보를 탈탈 털어 리스팅해 드립니다.")
     
     col_ip1, col_ip2 = st.columns(2)
     with col_ip1:
@@ -249,18 +249,17 @@ with tab2:
                                     ["귀여운/친근한", "힙한/트렌디한", "고급스러운/럭셔리", "친환경/가치소비", "유머/B급 감성", "힐링/휴식", "예술적/아티스틱"], key="ip_c")
     with col_ip2:
         ip_goal = st.selectbox("🏆 콜라보 핵심 목적", ["오프라인 공간 방문객 유도 (팝업/전시)", "신규 멤버십 가입 유도", "SNS 바이럴 및 화제성 확보", "굿즈/F&B 상품 판매 연계"], key="ip_g")
-        ip_custom = st.text_area("✍️ 특별한 조건이나 행사 내용 (선택)", placeholder="예: 여름 시즌 워터파크 오픈 기념, 친환경 ESG 캠페인에 어울리는 캐릭터 등", key="ip_cu")
 
-    if st.button("맞춤형 IP 매칭 리서치 시작 🚀", key="btn2_ip"):
+    if st.button("맞춤형 IP 대량 매칭 리서치 시작 🚀", key="btn2_ip"):
         if not ip_concept:
             st.warning("원하는 콜라보 컨셉을 최소 1개 이상 선택해주세요.")
         else:
-            with st.status("최신 IP 트렌드를 분석하고 최적의 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
+            with st.status("최신 IP 트렌드를 분석하고 가능한 한 많은 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
-                    st.write("🧠 현재 뜨고 있는 IP 트렌드를 검색하기 위한 쿼리를 설계 중입니다...")
-                    ip_intent = f"타겟: {ip_target}, 컨셉: {', '.join(ip_concept)}, 목적: {ip_goal}, 추가조건: {ip_custom}"
+                    st.write("🧠 현재 뜨고 있는 IP 트렌드를 폭넓게 검색하기 위한 쿼리를 설계 중입니다...")
+                    ip_intent = f"타겟: {ip_target}, 컨셉: {', '.join(ip_concept)}, 목적: {ip_goal}"
                     
                     ip_query_prompt = f"""
                     당신은 브랜드 IP 콜라보레이션 전문가입니다.
@@ -271,15 +270,15 @@ with tab2:
                     
                     [작업 규칙]
                     1. 따옴표 남발 금지. "국내" 필수 포함.
-                    2. 검색어 예시: 국내 2030 MZ세대 힙한 캐릭터 IP 팝업 콜라보레이션 성공 사례 트렌드
+                    2. 다양한 후보를 찾기 위해 포괄적인 단어 위주로 작성 (예: 국내 2030 힙한 캐릭터 IP 콜라보레이션 인기 트렌드)
                     3. 끝에 "-대만 -일본 -중국 -글로벌 -해외" 를 반드시 붙일 것.
                     4. 검색어 1줄만 출력.
                     """
                     ip_optimized_query = model.generate_content(ip_query_prompt).text.strip()
                     st.write(f"👉 IP 검색어: `{ip_optimized_query}`")
                     
-                    st.write("🔍 최신 콜라보레이션 기사 및 IP 동향을 수집 중입니다...")
-                    search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 20}
+                    st.write("🔍 방대한 양의 최신 콜라보레이션 기사 및 IP 동향을 수집 중입니다...")
+                    search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 30} # 물량 확보를 위해 30으로 상향
                     if tavily_time_range: search_params_ip["time_range"] = tavily_time_range
                         
                     ip_search_result = tavily_client.search(**search_params_ip)
@@ -293,10 +292,10 @@ with tab2:
                     ip_context = "\n".join([f"- 제목: {res['title']}\n  내용: {res['content']}\n  링크: {res['url']}\n" for res in ip_results_list])
                     st.write(f"✅ {len(ip_results_list)}개의 IP 트렌드 문서를 분석합니다.")
                     
-                    st.write("🎯 브랜드 핏에 맞는 IP 후보를 매칭하고 아이디어를 기획 중입니다...")
+                    st.write("🎯 브랜드 핏에 맞는 IP 후보들을 긁어모아 압도적인 양의 리스트를 작성 중입니다...")
                     
                     ip_report_prompt = f"""
-                    당신은 {target_industry} 산업의 브랜드 기획자입니다. 우리 브랜드({specific_brand if specific_brand else '자사'})를 위한 최고의 IP 콜라보레이션 후보를 추천해야 합니다.
+                    당신은 {target_industry} 산업의 브랜드 기획자입니다. 우리 브랜드({specific_brand if specific_brand else '자사'})를 위한 IP 콜라보레이션 후보를 제안해야 합니다.
                     
                     [검색된 최신 IP 트렌드 데이터]
                     {ip_context}
@@ -306,30 +305,30 @@ with tab2:
                     
                     [작업 규칙 - 절대 엄수]
                     1. 가짜 IP 창작 금지: 반드시 검색된 데이터에 등장하거나, 현재 대한민국에서 실존하는 유명 IP(캐릭터, 라이프스타일 브랜드, F&B, 일러스트레이터 등)만 추천하십시오.
-                    2. 후보 매칭: 사용자 조건과 가장 핏이 잘 맞는 IP 후보를 **최대 3개~5개** 엄선하십시오.
-                    3. 아이디어 기획: 해당 IP를 우리 산업군({target_industry})에 적용했을 때의 '구체적인 공간 연출이나 프로모션 아이디어'를 제안하십시오.
-                    4. 출처 링크: 데이터에서 참고한 경우 `[기사 보기](URL)` 형태로 링크를 첨부하십시오.
+                    2. 압도적인 수량(Volume): 사용자 조건과 핏이 맞는 IP 후보를 **최소 10개에서 20개 이상 최대한 많이** 발굴하여 리스팅하십시오. 절대 3~5개로 요약하거나 뭉뚱그리지 마십시오.
+                    3. 아이디어 기획: 해당 IP를 우리 산업군({target_industry})에 적용했을 때의 '구체적인 공간 연출이나 프로모션 아이디어'를 각각 제안하십시오.
+                    4. 출처 링크: 데이터에서 참고한 경우 `[기사 보기](URL)` 형태로 짧게 링크를 첨부하십시오.
                     
                     [출력 양식]
-                    # 🦄 맞춤형 IP 콜라보레이션 매칭 리포트
+                    # 🦄 맞춤형 대규모 IP 콜라보레이션 매칭 리포트
                     
                     *(타겟 산업군: {target_industry} / 콜라보 목적: {ip_goal})*
                     
                     ## 1. 최신 IP 트렌드 요약
                     - 검색 데이터를 기반으로, 현재 사용자가 선택한 타겟층({ip_target})이 열광하는 콜라보 트렌드 특징 2~3줄 요약.
                     
-                    ## 2. 추천 IP 후보 및 콜라보 기획안 (Top Candidates)
-                    (아래 표를 작성하십시오)
-                    | 추천 IP (캐릭터/브랜드명) | 추천 이유 (Brand Fit) | 💡 콜라보 아이디어 (공간/이벤트 적용 방안) | 기대 효과 및 시너지 | 참고 링크 |
-                    |---|---|---|---|---|
-                    | ... | ... | ... | ... | `[기사 보기](URL)` |
+                    ## 2. 추천 IP 후보 리스트 (Top 10+)
+                    (최대한 많은 후보를 아래 표에 작성하십시오)
+                    | 추천 IP (캐릭터/브랜드명) | 추천 이유 (Brand Fit) | 💡 콜라보 아이디어 (공간/이벤트 적용 방안) | 참고 링크 |
+                    |---|---|---|---|
+                    | ... | ... | ... | `[기사 보기](URL)` |
                     
                     ## 3. 기획자 코멘트 (Next Step)
-                    - 위 후보 중 가장 추천하는 1가지와 실무 진행 시 고려해야 할 점 1~2줄 요약.
+                    - 위 수많은 후보 중 가장 강력하게 추천하는 1가지와 실무 진행 시 고려해야 할 점 1~2줄 요약.
                     """
                     
                     ip_report_content = model.generate_content(ip_report_prompt).text
-                    status.update(label="IP 매칭 리포트 완성!", state="complete", expanded=False)
+                    status.update(label="대규모 IP 매칭 리포트 완성!", state="complete", expanded=False)
                     
                     st.subheader("🎯 IP 콜라보레이션 제안서")
                     st.markdown(f"<div class='result-container'>{ip_report_content}</div>", unsafe_allow_html=True)
@@ -339,7 +338,7 @@ with tab2:
                     st.download_button(
                         label="📥 제안서 Word 문서 다운로드", 
                         data=docx_file_ip, 
-                        file_name=f"IP_Collab_Proposal_{current_date_formatted}.docx", 
+                        file_name=f"IP_Collab_Mass_Proposal_{current_date_formatted}.docx", 
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
                         key="dl_btn2"
                     )
