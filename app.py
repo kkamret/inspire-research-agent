@@ -64,7 +64,6 @@ inspire_style_css = """
     .result-container table { width: 100%; }
     .result-container th, .result-container td { word-break: keep-all; }
     
-    /* 탭(Tabs) 디자인 스타일링 */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] {
         background-color: #E9ECEF; border-radius: 6px 6px 0px 0px;
@@ -84,12 +83,12 @@ with st.sidebar:
     target_industry = st.selectbox("1. 자사/타겟 산업군", ["호텔/리조트", "카지노/복합리조트", "오프라인 유통/복합몰", "F&B/외식업"])
     specific_brand = st.text_input("2. 자사 브랜드명 (선택)", placeholder="예: 인스파이어, 파라다이스 등")
     
+    # 에러가 발생하던 3년 이상 옵션 삭제
     period_options = {
         "최근 1개월": ("month", ""),
         "최근 3개월": ("year", f"{current_year}년 최근 3개월"), 
         "최근 6개월": ("year", f"{current_year}년 최근 6개월"), 
-        "최근 1년": ("year", ""),
-        "최근 3년": ("any", f"{current_year - 3}년 이후부터 {current_year}년까지")
+        "최근 1년": ("year", "")
     }
     selected_time = st.selectbox("3. 리서치 기간", list(period_options.keys()), index=3)
     tavily_time_range, text_time_prompt = period_options[selected_time]
@@ -100,7 +99,7 @@ with st.sidebar:
 tab1, tab2 = st.tabs(["📊 마케팅 트렌드 딥 리서치", "🦄 IP 콜라보 매칭 에이전트"])
 
 # =========================================================
-# [TAB 1] 마케팅 트렌드 딥 리서치
+# [TAB 1] 마케팅 트렌드 딥 리서치 
 # =========================================================
 with tab1:
     st.subheader("💡 리서치 키워드 조합 (모듈형)")
@@ -224,11 +223,11 @@ with tab1:
                     st.error(f"작업 중 에러가 발생했습니다: {e}")
 
 # =========================================================
-# [TAB 2] IP 콜라보 매칭 에이전트 (IP 국적 설정 추가 및 행사 장소 국내 한정)
+# [TAB 2] IP 콜라보 매칭 에이전트 (SNS 기반 + 대량 후보군 강제)
 # =========================================================
 with tab2:
     st.subheader("🦄 브랜드 맞춤형 IP/캐릭터 콜라보레이션 제안")
-    st.markdown("원하는 콜라보 컨셉을 선택하시면, **국내에서 실제로 행사를 진행한 수많은 인기 IP** 후보를 찾아 리스팅해 드립니다.")
+    st.markdown("원하는 콜라보 컨셉을 선택하시면, **인스타, X(트위터), 커뮤니티 등에서 가장 핫한 수십 개의 IP 후보**를 탈탈 털어 리스팅해 드립니다.")
     
     col_ip1, col_ip2 = st.columns(2)
     with col_ip1:
@@ -243,11 +242,11 @@ with tab2:
         if not ip_concept:
             st.warning("원하는 콜라보 컨셉을 최소 1개 이상 선택해주세요.")
         else:
-            with st.status("최신 IP 트렌드를 분석하고 가능한 한 많은 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
+            with st.status("최신 SNS 및 커뮤니티 트렌드를 분석하고 가능한 한 많은 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
-                    st.write("🧠 현재 뜨고 있는 IP 트렌드를 폭넓게 검색하기 위한 쿼리를 설계 중입니다...")
+                    st.write("🧠 X(트위터), 인스타그램 등 SNS 바이럴 트렌드를 긁어모으기 위한 쿼리 설계 중...")
                     
                     ip_intent_parts = [f"산업군: {target_industry}"]
                     if specific_brand: ip_intent_parts.append(f"자사브랜드: {specific_brand}")
@@ -266,16 +265,17 @@ with tab2:
                     [사용자 조건]
                     {ip_intent}
                     
-                    [작업 규칙]
-                    1. 행사 장소 한정: IP의 국적이 국내든 해외든 상관없이, **콜라보 팝업이나 행사는 무조건 대한민국(국내/한국)에서 열린 사례여야 합니다.** 검색어에 "한국" 혹은 "국내"를 반드시 포함하십시오.
-                    2. IP 국적 반영: 사용자가 '{ip_origin}'을 선택했습니다. 이에 맞춰 검색어에 "국내 캐릭터", "글로벌 IP" 등의 단어를 문맥에 맞게 조절하되, 행사는 한국에서 열린 것이어야 합니다.
-                    3. 노이즈 차단: 끝에 "-대만 -일본 -중국 -해외진출 -글로벌진출" 을 반드시 붙일 것.
-                    4. 검색어 1줄만 출력.
+                    [작업 규칙 - 절대 엄수]
+                    1. 행사 장소 한정: IP의 국적이 국내든 해외든 상관없이, 콜라보 팝업이나 행사는 무조건 대한민국(국내/한국)에서 열린 사례여야 합니다. 
+                    2. SNS 및 바이럴 특화 (중요): 지루한 기업 뉴스 대신 블로그, 인스타그램, 트위터(X), 더쿠 등 커뮤니티에서 화제가 된 캐릭터 팝업을 찾기 위해 **"인스타", "트위터", "인증샷", "품절", "웨이팅"** 같은 키워드를 검색어에 자연스럽게 섞으십시오.
+                    3. IP 국적 반영: 사용자가 '{ip_origin}'을 선택했습니다. 이에 맞춰 검색어에 반영하십시오.
+                    4. 노이즈 차단: 끝에 "-대만 -일본 -중국 -해외진출 -글로벌진출" 을 반드시 붙일 것.
+                    5. 검색어 1줄만 출력.
                     """
                     ip_optimized_query = model.generate_content(ip_query_prompt).text.strip()
-                    st.write(f"👉 IP 검색어: `{ip_optimized_query}`")
+                    st.write(f"👉 IP SNS 검색어: `{ip_optimized_query}`")
                     
-                    st.write("🔍 방대한 양의 최신 콜라보레이션 기사 및 IP 동향을 수집 중입니다...")
+                    st.write("🔍 방대한 양의 최신 SNS 게시물 및 기사 동향을 수집 중입니다...")
                     search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 30} 
                     if tavily_time_range: search_params_ip["time_range"] = tavily_time_range
                         
@@ -290,7 +290,7 @@ with tab2:
                     ip_context = "\n".join([f"- 제목: {res['title']}\n  내용: {res['content']}\n  링크: {res['url']}\n" for res in ip_results_list])
                     st.write(f"✅ {len(ip_results_list)}개의 IP 트렌드 문서를 분석합니다.")
                     
-                    st.write("🎯 우리 브랜드 핏에 맞는 IP 후보들을 긁어모아 압도적인 양의 리스트를 작성 중입니다...")
+                    st.write("🎯 기사에 스쳐 지나가는 IP까지 샅샅이 뒤져 압도적인 양의 리스트를 강제 작성 중입니다...")
                     
                     ip_report_prompt = f"""
                     당신은 {target_industry} 산업의 브랜드 기획자입니다. 우리 브랜드({specific_brand if specific_brand else '자사'})를 위한 최고의 IP 콜라보레이션 후보를 제안해야 합니다.
@@ -302,11 +302,10 @@ with tab2:
                     {ip_intent}
                     
                     [작업 규칙 - 절대 엄수]
-                    1. 해외 행사 즉각 폐기 (Kill Switch): 사용자가 원하는 IP 국적({ip_origin})이 해외일지라도, **그 IP가 진행한 팝업이나 행사가 대한민국(한국) 영토 밖에서 열린 것이라면 무조건 표에서 폐기하십시오.** 오직 한국 내에서 열린 콜라보레이션 사례만 다루십시오.
-                    2. IP 국적 필터링: 사용자 요구조건의 [IP국적조건]을 반드시 확인하고, 그에 맞는 국적의 IP만 리스트업 하십시오.
-                    3. 압도적인 수량(Volume): 조건에 맞는 IP 후보를 **최소 10개에서 20개 이상 최대한 많이** 발굴하여 리스팅하십시오.
-                    4. 맞춤형 아이디어 기획: 각 IP를 **우리의 타겟 산업군({target_industry}) 오프라인 공간이나 서비스에 어떻게 적용할 것인지** 구체적인 아이디어를 제안하십시오.
-                    5. 출처 링크: 데이터에서 참고한 경우 `[기사 보기](URL)` 형태로 짧게 링크를 첨부하십시오.
+                    1. 해외 행사 즉각 폐기 (Kill Switch): 사용자가 원하는 IP 국적({ip_origin})이 해외일지라도, 그 IP가 진행한 행사가 대한민국(한국) 영토 밖에서 열린 것이라면 무조건 표에서 폐기하십시오.
+                    2. 압도적인 수량 강제 (경고): 절대 3~5개로 요약하지 마십시오. 검색된 문서의 본문을 샅샅이 뒤져서, 메인 캐릭터뿐만 아니라 서브 캐릭터, 언급된 다른 팝업스토어 브랜드 등 **가능한 모든 IP 후보를 쥐어짜 내어 최소 10개 이상의 행(Row)으로 표를 꽉 채우십시오. 후보가 10개 미만일 경우 불합격 처리됩니다.**
+                    3. 맞춤형 아이디어 기획: 각 IP를 우리의 특정 타겟 산업군({target_industry}) 오프라인 공간이나 서비스에 어떻게 적용할 것인지 구체적인 아이디어를 제안하십시오.
+                    4. 출처 링크: 데이터에서 참고한 경우 `[기사 보기](URL)` 형태로 짧게 링크를 첨부하십시오.
                     
                     [출력 양식]
                     # 🦄 맞춤형 대규모 IP 콜라보레이션 매칭 리포트
@@ -314,12 +313,13 @@ with tab2:
                     *(타겟 산업군: {target_industry} / 요구 IP 국적: {ip_origin})*
                     
                     ## 1. 최신 IP 트렌드 요약
-                    - 현재 선택된 타겟층({ip_target})이 선호하는 콜라보 트렌드 특징을 2~3줄로 요약.
+                    - 현재 선택된 타겟층({ip_target})이 SNS에서 열광하는 콜라보 트렌드 특징을 2~3줄로 요약.
                     
-                    ## 2. 추천 IP 후보 리스트 (Top 10+)
+                    ## 2. 추천 IP 후보 리스트 (최소 10개 이상 필수)
                     | 추천 IP (캐릭터/브랜드명) | {target_industry} 산업 추천 이유 | 💡 콜라보 아이디어 (공간/이벤트 적용 방안) | 참고 링크 |
                     |---|---|---|---|
                     | ... | ... | ... | `[기사 보기](URL)` |
+                    (이곳에 최소 10개 이상의 후보를 무조건 작성하십시오.)
                     
                     ## 3. 기획자 코멘트 (Next Step)
                     - 위 수많은 후보 중 가장 강력하게 추천하는 1가지와 실무 진행 시 고려해야 할 점 1~2줄 요약.
