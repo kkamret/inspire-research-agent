@@ -4,6 +4,7 @@ from tavily import TavilyClient
 from docx import Document
 from io import BytesIO
 from datetime import datetime
+import time # ⏳ 숨 고르기(sleep)를 위한 모듈 추가
 
 # --- 1. API 키 세팅 ---
 try:
@@ -76,14 +77,13 @@ st.markdown(f'<style>{inspire_style_css}</style>', unsafe_allow_html=True)
 st.title("🔍 Marketing & IP Research Agent")
 st.markdown("---")
 
-# --- 4. 검색 조건 설정 (사이드바 - 공통 적용) ---
+# --- 4. 검색 조건 설정 (사이드바) ---
 with st.sidebar:
     st.header("⚙️ 기본 환경 설정")
     st.markdown("*(이 설정은 모든 탭의 AI 분석에 최우선으로 반영됩니다)*")
     target_industry = st.selectbox("1. 자사/타겟 산업군", ["호텔/리조트", "카지노/복합리조트", "오프라인 유통/복합몰", "F&B/외식업"])
     specific_brand = st.text_input("2. 자사 브랜드명 (선택)", placeholder="예: 인스파이어, 파라다이스 등")
     
-    # 에러가 발생하던 3년 이상 옵션 삭제
     period_options = {
         "최근 1개월": ("month", ""),
         "최근 3개월": ("year", f"{current_year}년 최근 3개월"), 
@@ -119,7 +119,7 @@ with tab1:
         if not channel_pick and not target_pick and not action_pick and not custom_query:
             st.warning("최소 하나 이상의 키워드 블록을 선택하거나 입력해주세요.")
         else:
-            with st.status(f"에이전트가 {target_industry} 트렌드를 딥 리서치 중입니다. (약 15~30초 소요)...", expanded=True) as status:
+            with st.status(f"에이전트가 {target_industry} 트렌드를 리서치 중입니다...", expanded=True) as status:
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
@@ -137,15 +137,12 @@ with tab1:
                     
                     query_gen_prompt = f"""
                     당신은 마케팅 리서치를 위한 '검색어 최적화(SEO) 전문가'입니다.
-                    아래 [사용자 선택 키워드]를 참고하여, 검색 엔진에서 가장 유의미한 '대한민국 마케팅 성공 사례 기사'를 찾을 수 있는 **검색어 문자열 1줄만** 출력하십시오.
-                    
-                    [검색어 작성 규칙 - 절대 엄수]
-                    1. 과도한 따옴표 금지: 모든 단어에 따옴표("")를 씌우지 마십시오. 주요 키워드를 자연스러운 띄어쓰기로 나열하십시오.
-                    2. 강력한 필수 포함: 오직 [★필수 포함 추가키워드]가 있을 경우에만 해당 단어에 따옴표(" ")를 씌워 검색어에 포함하십시오.
-                    3. 한국 기사 강제: "국내" 라는 단어를 반드시 포함할 것.
-                    4. 해외 및 노이즈 차단: 문장 끝에 반드시 "-대만 -일본 -중국 -글로벌 -해외진출 -배달 -금융 -보험 -IT기업" 을 붙일 것.
-                    5. 오직 완성된 검색어 1줄만 출력할 것.
-                    
+                    [검색어 작성 규칙]
+                    1. 과도한 따옴표 금지.
+                    2. 오직 [★필수 포함 추가키워드]가 있을 경우에만 해당 단어에 따옴표(" ") 적용.
+                    3. 한국 기사 강제: "국내" 필수 포함.
+                    4. 노이즈 차단: "-대만 -일본 -중국 -글로벌 -해외진출 -배달 -금융 -보험 -IT기업" 끝에 추가.
+                    5. 검색어 1줄만 출력.
                     [사용자 선택 키워드]
                     {user_intent}
                     """
@@ -153,9 +150,14 @@ with tab1:
                     optimized_query = model.generate_content(query_gen_prompt).text.strip()
                     st.write(f"👉 설계된 검색어: `{optimized_query}`")
 
-                    st.write("🔍 엄격한 필터를 적용하여 웹 데이터를 광범위하게 수집 중입니다...")
+                    # 💡 무료 한도 방어를 위한 5초 휴식
+                    st.write("⏳ API 호출 한도 방어를 위해 잠시 숨 고르기 중입니다 (약 5초)...")
+                    time.sleep(5)
+
+                    st.write("🔍 엄격한 필터를 적용하여 웹 데이터를 수집 중입니다...")
                     
-                    search_params = {"query": optimized_query, "search_depth": "advanced", "max_results": 25}
+                    # 💡 데이터 양 다이어트 (max_results 12로 축소)
+                    search_params = {"query": optimized_query, "search_depth": "advanced", "max_results": 12}
                     if tavily_time_range: search_params["time_range"] = tavily_time_range
                         
                     search_result = tavily_client.search(**search_params)
@@ -163,7 +165,7 @@ with tab1:
                     
                     if not search_results_list:
                         status.update(label="검색 결과 없음", state="error", expanded=True)
-                        st.error("앗! 선택하신 키워드 조합이 너무 구체적이어서 일치하는 기사를 찾지 못했습니다. 키워드를 줄이거나 기간을 넓혀주세요.")
+                        st.error("일치하는 기사를 찾지 못했습니다. 키워드를 줄이거나 기간을 넓혀주세요.")
                         st.stop()
                         
                     context_text = "\n".join([f"- 제목: {res['title']}\n  내용: {res['content']}\n  출처 링크: {res['url']}\n" for res in search_results_list])
@@ -172,40 +174,31 @@ with tab1:
                     st.write("🧠 수집된 데이터를 검증하여 최상위 사례만 표로 정리 중입니다...")
                     
                     report_prompt = f"""
-                    당신은 경영진에게 보고할 '데이터 기반 전략 기획 리포트'를 작성하는 최고 수준의 깐깐한 CX/마케팅 리서처입니다.
-                    아래 수집된 데이터를 바탕으로 리포트를 작성하되, **반드시 아래 규칙을 엄수**하십시오.
-
+                    당신은 경영진에게 보고할 '데이터 기반 전략 기획 리포트'를 작성하는 깐깐한 CX/마케팅 리서처입니다.
                     [검색된 데이터]
                     {context_text}
-
-                    [작업 규칙 - 절대 엄수]
-                    1. 환경 설정 완벽 준수: 사용자가 타겟 산업군으로 '{target_industry}'를 설정했습니다. 가급적 이 산업군(또는 밀접한 오프라인/공간 비즈니스)의 사례를 최우선으로 배치하십시오.
-                    2. 해외 사례 즉각 폐기: 대한민국 영토 밖에서 벌어진 일이나 브랜드의 해외 진출 사례는 무조건 제외하십시오. 오직 한국 내에서 열린 행사만 다루십시오.
-                    3. 품질 우선주의: 구체적인 내용이 포함된 **고퀄리티 사례만 엄선하여 5개~15개 사이**로 표를 구성하십시오. 
+                    [작업 규칙]
+                    1. 환경 설정 완벽 준수: 타겟 산업군('{target_industry}') 사례를 최우선으로 배치하십시오.
+                    2. 해외 사례 즉각 폐기: 오직 한국 내에서 열린 행사만 다루십시오.
+                    3. 품질 우선주의: 구체적인 내용이 포함된 사례를 **3개~7개 사이**로 표를 구성하십시오. 
                     4. 출처 링크 포맷 강제: 표의 '출처 링크' 칸은 무조건 `[기사 보기](URL)` 형태의 마크다운 하이퍼링크로만 작성하십시오.
-                    5. 이벤트 디테일 묘사: 어떤 기업이, 누구를 대상으로, 무엇을 어떻게 했는지 상세하게 묘사하십시오.
-
                     [출력 양식]
-                    # 📊 마케팅 레퍼런스 딥 리서치 리포트
-
+                    # 📊 마케팅 레퍼런스 리서치 리포트
                     *(분석 타겟: {target_industry} / 주요 키워드: {', '.join(channel_pick + target_pick + action_pick)} / 기간: {selected_time})*
-
                     ## 1. 핵심 레퍼런스 요약 (Key Highlights)
-                    - 수집된 데이터 중 가장 벤치마킹하기 좋은 구체적 성공 사례 2~3가지를 요약. (출처 링크 포함)
-
+                    - 벤치마킹하기 좋은 구체적 성공 사례 2~3가지 요약. (출처 링크 포함)
                     ## 2. 주요 기업별 캠페인 상세 분석 (Case Study)
                     | 기업/브랜드명 | 주요 캠페인/이벤트 상세 내용 (진행 방식 및 특징) | 확인된 성과 및 고객 반응 | 출처 링크 |
                     |---|---|---|---|
                     | ... | ... | ... | `[기사 보기](URL)` |
-
                     ## 3. 실무 적용을 위한 전략적 시사점 (Actionable Insights)
-                    - 우리 회사({target_industry} 산업)가 실제 기획 시 적용해볼 수 있는 구체적인 전략 방향 요약.
+                    - 우리 회사({target_industry} 산업)가 적용해볼 수 있는 구체적인 전략 방향 요약.
                     """
                     
                     report_content = model.generate_content(report_prompt).text
-                    status.update(label="딥 리서치 및 리포트 작성 완료!", state="complete", expanded=False)
+                    status.update(label="리서치 및 리포트 작성 완료!", state="complete", expanded=False)
                     
-                    st.subheader("📈 딥 리서치 결과 리포트")
+                    st.subheader("📈 리서치 결과 리포트")
                     st.markdown(f"<div class='result-container'>{report_content}</div>", unsafe_allow_html=True)
                     
                     docx_file = create_word_document(f"트렌드 리포트", report_content)
@@ -213,7 +206,7 @@ with tab1:
                     st.download_button(
                         label="📥 Word 문서로 다운로드",
                         data=docx_file,
-                        file_name=f"Deep_Research_Report_{current_date_formatted}.docx",
+                        file_name=f"Trend_Report_{current_date_formatted}.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="dl_btn1"
                     )
@@ -223,11 +216,11 @@ with tab1:
                     st.error(f"작업 중 에러가 발생했습니다: {e}")
 
 # =========================================================
-# [TAB 2] IP 콜라보 매칭 에이전트 (SNS 기반 + 대량 후보군 강제)
+# [TAB 2] IP 콜라보 매칭 에이전트 
 # =========================================================
 with tab2:
     st.subheader("🦄 브랜드 맞춤형 IP/캐릭터 콜라보레이션 제안")
-    st.markdown("원하는 콜라보 컨셉을 선택하시면, **인스타, X(트위터), 커뮤니티 등에서 가장 핫한 수십 개의 IP 후보**를 탈탈 털어 리스팅해 드립니다.")
+    st.markdown("원하는 콜라보 컨셉을 선택하시면, **인스타, X(트위터), 커뮤니티 등에서 가장 핫한 IP 후보**를 찾아 리스팅해 드립니다.")
     
     col_ip1, col_ip2 = st.columns(2)
     with col_ip1:
@@ -238,15 +231,15 @@ with tab2:
         ip_concept = st.multiselect("🎨 원하는 콜라보 컨셉 (최대 3개)", 
                                     ["귀여운/친근한", "힙한/트렌디한", "고급스러운/럭셔리", "친환경/가치소비", "유머/B급 감성", "힐링/휴식", "예술적/아티스틱"], key="ip_c")
 
-    if st.button("맞춤형 IP 대량 매칭 리서치 시작 🚀", key="btn2_ip"):
+    if st.button("맞춤형 IP 매칭 리서치 시작 🚀", key="btn2_ip"):
         if not ip_concept:
             st.warning("원하는 콜라보 컨셉을 최소 1개 이상 선택해주세요.")
         else:
-            with st.status("최신 SNS 및 커뮤니티 트렌드를 분석하고 가능한 한 많은 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
+            with st.status("SNS 및 커뮤니티 트렌드를 분석하고 콜라보 후보를 찾고 있습니다...", expanded=True) as status:
                 try:
                     model = genai.GenerativeModel('gemini-2.5-flash')
                     
-                    st.write("🧠 X(트위터), 인스타그램 등 SNS 바이럴 트렌드를 긁어모으기 위한 쿼리 설계 중...")
+                    st.write("🧠 바이럴 트렌드를 긁어모으기 위한 쿼리 설계 중...")
                     
                     ip_intent_parts = [f"산업군: {target_industry}"]
                     if specific_brand: ip_intent_parts.append(f"자사브랜드: {specific_brand}")
@@ -260,23 +253,26 @@ with tab2:
                     
                     ip_query_prompt = f"""
                     당신은 브랜드 IP 콜라보레이션 전문가입니다.
-                    아래 [사용자 조건]을 바탕으로, 검색 엔진에서 가장 유의미한 검색어 1줄을 작성하세요.
-                    
                     [사용자 조건]
                     {ip_intent}
-                    
-                    [작업 규칙 - 절대 엄수]
-                    1. 행사 장소 한정: IP의 국적이 국내든 해외든 상관없이, 콜라보 팝업이나 행사는 무조건 대한민국(국내/한국)에서 열린 사례여야 합니다. 
-                    2. SNS 및 바이럴 특화 (중요): 지루한 기업 뉴스 대신 블로그, 인스타그램, 트위터(X), 더쿠 등 커뮤니티에서 화제가 된 캐릭터 팝업을 찾기 위해 **"인스타", "트위터", "인증샷", "품절", "웨이팅"** 같은 키워드를 검색어에 자연스럽게 섞으십시오.
-                    3. IP 국적 반영: 사용자가 '{ip_origin}'을 선택했습니다. 이에 맞춰 검색어에 반영하십시오.
+                    [작업 규칙]
+                    1. 행사 장소 한정: 콜라보 팝업이나 행사는 무조건 대한민국(한국)에서 열린 사례여야 합니다. 
+                    2. SNS 및 바이럴 특화: "인스타", "트위터", "인증샷", "품절", "웨이팅" 같은 키워드를 검색어에 자연스럽게 섞으십시오.
+                    3. IP 국적 반영: 사용자가 '{ip_origin}'을 선택했습니다.
                     4. 노이즈 차단: 끝에 "-대만 -일본 -중국 -해외진출 -글로벌진출" 을 반드시 붙일 것.
                     5. 검색어 1줄만 출력.
                     """
                     ip_optimized_query = model.generate_content(ip_query_prompt).text.strip()
                     st.write(f"👉 IP SNS 검색어: `{ip_optimized_query}`")
+
+                    # 💡 무료 한도 방어를 위한 5초 휴식
+                    st.write("⏳ API 호출 한도 방어를 위해 잠시 숨 고르기 중입니다 (약 5초)...")
+                    time.sleep(5)
                     
-                    st.write("🔍 방대한 양의 최신 SNS 게시물 및 기사 동향을 수집 중입니다...")
-                    search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 30} 
+                    st.write("🔍 최신 SNS 게시물 및 기사 동향을 수집 중입니다...")
+                    
+                    # 💡 데이터 양 다이어트 (max_results 15로 축소)
+                    search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 15} 
                     if tavily_time_range: search_params_ip["time_range"] = tavily_time_range
                         
                     ip_search_result = tavily_client.search(**search_params_ip)
@@ -290,43 +286,34 @@ with tab2:
                     ip_context = "\n".join([f"- 제목: {res['title']}\n  내용: {res['content']}\n  링크: {res['url']}\n" for res in ip_results_list])
                     st.write(f"✅ {len(ip_results_list)}개의 IP 트렌드 문서를 분석합니다.")
                     
-                    st.write("🎯 기사에 스쳐 지나가는 IP까지 샅샅이 뒤져 압도적인 양의 리스트를 강제 작성 중입니다...")
+                    st.write("🎯 브랜드 핏에 맞는 IP 후보들을 긁어모아 리스트를 작성 중입니다...")
                     
                     ip_report_prompt = f"""
                     당신은 {target_industry} 산업의 브랜드 기획자입니다. 우리 브랜드({specific_brand if specific_brand else '자사'})를 위한 최고의 IP 콜라보레이션 후보를 제안해야 합니다.
-                    
                     [검색된 최신 데이터]
                     {ip_context}
-                    
                     [사용자 요구 조건]
                     {ip_intent}
-                    
                     [작업 규칙 - 절대 엄수]
-                    1. 해외 행사 즉각 폐기 (Kill Switch): 사용자가 원하는 IP 국적({ip_origin})이 해외일지라도, 그 IP가 진행한 행사가 대한민국(한국) 영토 밖에서 열린 것이라면 무조건 표에서 폐기하십시오.
-                    2. 압도적인 수량 강제 (경고): 절대 3~5개로 요약하지 마십시오. 검색된 문서의 본문을 샅샅이 뒤져서, 메인 캐릭터뿐만 아니라 서브 캐릭터, 언급된 다른 팝업스토어 브랜드 등 **가능한 모든 IP 후보를 쥐어짜 내어 최소 10개 이상의 행(Row)으로 표를 꽉 채우십시오. 후보가 10개 미만일 경우 불합격 처리됩니다.**
+                    1. 해외 행사 즉각 폐기: 그 IP가 진행한 행사가 대한민국(한국) 영토 밖에서 열린 것이라면 무조건 표에서 폐기하십시오.
+                    2. 수량 확보: 검색된 문서의 본문을 살펴서 가능한 모든 IP 후보를 쥐어짜 내어 **5개~10개 내외**로 리스팅하십시오.
                     3. 맞춤형 아이디어 기획: 각 IP를 우리의 특정 타겟 산업군({target_industry}) 오프라인 공간이나 서비스에 어떻게 적용할 것인지 구체적인 아이디어를 제안하십시오.
                     4. 출처 링크: 데이터에서 참고한 경우 `[기사 보기](URL)` 형태로 짧게 링크를 첨부하십시오.
-                    
                     [출력 양식]
-                    # 🦄 맞춤형 대규모 IP 콜라보레이션 매칭 리포트
-                    
+                    # 🦄 맞춤형 IP 콜라보레이션 매칭 리포트
                     *(타겟 산업군: {target_industry} / 요구 IP 국적: {ip_origin})*
-                    
                     ## 1. 최신 IP 트렌드 요약
                     - 현재 선택된 타겟층({ip_target})이 SNS에서 열광하는 콜라보 트렌드 특징을 2~3줄로 요약.
-                    
-                    ## 2. 추천 IP 후보 리스트 (최소 10개 이상 필수)
+                    ## 2. 추천 IP 후보 리스트 (5~10개)
                     | 추천 IP (캐릭터/브랜드명) | {target_industry} 산업 추천 이유 | 💡 콜라보 아이디어 (공간/이벤트 적용 방안) | 참고 링크 |
                     |---|---|---|---|
                     | ... | ... | ... | `[기사 보기](URL)` |
-                    (이곳에 최소 10개 이상의 후보를 무조건 작성하십시오.)
-                    
                     ## 3. 기획자 코멘트 (Next Step)
-                    - 위 수많은 후보 중 가장 강력하게 추천하는 1가지와 실무 진행 시 고려해야 할 점 1~2줄 요약.
+                    - 위 후보 중 가장 강력하게 추천하는 1가지와 실무 진행 시 고려해야 할 점 1~2줄 요약.
                     """
                     
                     ip_report_content = model.generate_content(ip_report_prompt).text
-                    status.update(label="대규모 IP 매칭 리포트 완성!", state="complete", expanded=False)
+                    status.update(label="IP 매칭 리포트 완성!", state="complete", expanded=False)
                     
                     st.subheader("🎯 IP 콜라보레이션 제안서")
                     st.markdown(f"<div class='result-container'>{ip_report_content}</div>", unsafe_allow_html=True)
@@ -336,7 +323,7 @@ with tab2:
                     st.download_button(
                         label="📥 제안서 Word 문서 다운로드", 
                         data=docx_file_ip, 
-                        file_name=f"IP_Collab_Mass_Proposal_{current_date_formatted}.docx", 
+                        file_name=f"IP_Collab_Proposal_{current_date_formatted}.docx", 
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
                         key="dl_btn2"
                     )
