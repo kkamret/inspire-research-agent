@@ -1,10 +1,10 @@
 import streamlit as st
 import google.generativeai as genai
 from tavily import TavilyClient
-from docx import Document
+import xlsxwriter
 from io import BytesIO
 from datetime import datetime
-import time # ⏳ 숨 고르기(sleep)를 위한 모듈 추가
+import time
 
 # --- 1. API 키 세팅 ---
 try:
@@ -20,17 +20,67 @@ genai.configure(api_key=GEMINI_API_KEY)
 current_year = datetime.now().year
 current_date_formatted = datetime.now().strftime('%Y-%m-%d')
 
-# --- 2. Word 문서 생성 함수 ---
-def create_word_document(title, content):
-    doc = Document()
-    doc.add_heading(title, 0)
-    doc.add_paragraph(f"리서치 수행일: {current_date_formatted}")
-    doc.add_paragraph("\n--- 데이터 리서치 결과 ---\n")
-    doc.add_paragraph(content)
-    file_stream = BytesIO()
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
+# --- 2. Excel 문서 자동 생성 및 포맷팅 함수 ---
+def create_excel_document(title, content):
+    output = BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet('Research Report')
+    
+    # 엑셀 셀 스타일 지정 (인스파이어 보라색 포인트 및 가독성 확보)
+    title_format = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#4A148C'})
+    date_format = workbook.add_format({'font_color': '#6C757D', 'italic': True})
+    header_format = workbook.add_format({'bold': True, 'bg_color': '#E9ECEF', 'border': 1, 'valign': 'vcenter', 'align': 'center'})
+    cell_format = workbook.add_format({'text_wrap': True, 'border': 1, 'valign': 'top'})
+    text_format = workbook.add_format({'valign': 'top'}) # 텍스트 넘침 허용
+    
+    # 표 가독성을 위한 열 너비 세팅
+    worksheet.set_column('A:A', 25) # 브랜드/IP명
+    worksheet.set_column('B:B', 60) # 상세 내용
+    worksheet.set_column('C:C', 40) # 성과 및 반응
+    worksheet.set_column('D:D', 30) # 링크 및 기타
+    worksheet.set_column('E:E', 30) 
+    
+    # 상단 타이틀 작성
+    worksheet.write('A1', title, title_format)
+    worksheet.write('A2', f"리서치 완료일: {current_date_formatted}", date_format)
+    
+    row = 3
+    in_table = False
+    
+    # 마크다운 텍스트를 분석하여 엑셀 셀에 지능적으로 분배
+    for line in content.split('\n'):
+        line = line.strip()
+        if not line:
+            row += 1
+            continue
+            
+        # 표(Table) 영역 감지
+        if line.startswith('|') and line.endswith('|'):
+            # 표의 구분선(|---|---|)은 엑셀에 불필요하므로 패스
+            if '---' in line:
+                continue
+            
+            cells = [cell.strip() for cell in line.split('|')[1:-1]]
+            
+            # 표의 헤더(첫 줄) 서식
+            if not in_table:
+                in_table = True
+                for col_num, cell_data in enumerate(cells):
+                    worksheet.write(row, col_num, cell_data, header_format)
+            # 표의 본문 데이터 서식
+            else:
+                for col_num, cell_data in enumerate(cells):
+                    worksheet.write(row, col_num, cell_data, cell_format)
+            row += 1
+        else:
+            in_table = False
+            # 표가 아닌 일반 요약/인사이트 텍스트는 A열에 작성하여 자연스럽게 넘치도록 배치
+            worksheet.write(row, 0, line, text_format)
+            row += 1
+            
+    workbook.close()
+    output.seek(0)
+    return output
 
 # --- 3. 웹 UI 구성 및 디자인 ---
 st.set_page_config(page_title="Marketing & IP Research Agent", layout="wide", page_icon="🔍")
@@ -52,8 +102,8 @@ inspire_style_css = """
         background-color: #E9ECEF; border-color: #4A148C; color: #4A148C;
     }
     
-    .stDownloadButton>button { background-color: #FFFFFF; color: #4A148C; border: 2px solid #4A148C; }
-    .stDownloadButton>button:hover { background-color: #F3E5F5; }
+    .stDownloadButton>button { background-color: #FFFFFF; color: #007233; border: 2px solid #007233; } /* 엑셀 그린 색상으로 변경 */
+    .stDownloadButton>button:hover { background-color: #E8F5E9; }
     
     div[data-testid="stStatusWidget"] { background-color: #F3E5F5; border: 1px solid #4A148C; color: #4A148C; }
     
@@ -150,13 +200,10 @@ with tab1:
                     optimized_query = model.generate_content(query_gen_prompt).text.strip()
                     st.write(f"👉 설계된 검색어: `{optimized_query}`")
 
-                    # 💡 무료 한도 방어를 위한 5초 휴식
                     st.write("⏳ API 호출 한도 방어를 위해 잠시 숨 고르기 중입니다 (약 5초)...")
                     time.sleep(5)
 
                     st.write("🔍 엄격한 필터를 적용하여 웹 데이터를 수집 중입니다...")
-                    
-                    # 💡 데이터 양 다이어트 (max_results 12로 축소)
                     search_params = {"query": optimized_query, "search_depth": "advanced", "max_results": 12}
                     if tavily_time_range: search_params["time_range"] = tavily_time_range
                         
@@ -201,13 +248,14 @@ with tab1:
                     st.subheader("📈 리서치 결과 리포트")
                     st.markdown(f"<div class='result-container'>{report_content}</div>", unsafe_allow_html=True)
                     
-                    docx_file = create_word_document(f"트렌드 리포트", report_content)
+                    # 💡 엑셀 출력 기능으로 대체
+                    excel_file = create_excel_document(f"{target_industry} 트렌드 리포트", report_content)
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.download_button(
-                        label="📥 Word 문서로 다운로드",
-                        data=docx_file,
-                        file_name=f"Trend_Report_{current_date_formatted}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        label="📊 Excel 리포트로 다운로드",
+                        data=excel_file,
+                        file_name=f"Trend_Report_{current_date_formatted}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         key="dl_btn1"
                     )
                     
@@ -265,13 +313,10 @@ with tab2:
                     ip_optimized_query = model.generate_content(ip_query_prompt).text.strip()
                     st.write(f"👉 IP SNS 검색어: `{ip_optimized_query}`")
 
-                    # 💡 무료 한도 방어를 위한 5초 휴식
                     st.write("⏳ API 호출 한도 방어를 위해 잠시 숨 고르기 중입니다 (약 5초)...")
                     time.sleep(5)
                     
                     st.write("🔍 최신 SNS 게시물 및 기사 동향을 수집 중입니다...")
-                    
-                    # 💡 데이터 양 다이어트 (max_results 15로 축소)
                     search_params_ip = {"query": ip_optimized_query, "search_depth": "advanced", "max_results": 15} 
                     if tavily_time_range: search_params_ip["time_range"] = tavily_time_range
                         
@@ -318,13 +363,14 @@ with tab2:
                     st.subheader("🎯 IP 콜라보레이션 제안서")
                     st.markdown(f"<div class='result-container'>{ip_report_content}</div>", unsafe_allow_html=True)
                     
-                    docx_file_ip = create_word_document("IP 콜라보 제안 리포트", ip_report_content)
+                    # 💡 엑셀 출력 기능으로 대체
+                    excel_file_ip = create_excel_document("IP 콜라보 제안 리포트", ip_report_content)
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.download_button(
-                        label="📥 제안서 Word 문서 다운로드", 
-                        data=docx_file_ip, 
-                        file_name=f"IP_Collab_Proposal_{current_date_formatted}.docx", 
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                        label="📊 Excel 제안서로 다운로드", 
+                        data=excel_file_ip, 
+                        file_name=f"IP_Collab_Proposal_{current_date_formatted}.xlsx", 
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
                         key="dl_btn2"
                     )
                     
