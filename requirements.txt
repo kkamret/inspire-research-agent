@@ -1,4 +1,4 @@
 streamlit
 google-generativeai
 tavily-python
-python-docx
+xlsxwriter
